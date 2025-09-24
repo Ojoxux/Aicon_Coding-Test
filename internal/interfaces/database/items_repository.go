@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"aicon-coding-test/internal/domain/entity"
@@ -106,6 +107,70 @@ func (r *ItemRepository) Delete(ctx context.Context, id int64) error {
 	}
 
 	return nil
+}
+
+// Update はアイテムの特定フィールドを部分更新する関数
+// name, brand, purchasePrice のうち、nilでない（送信された）フィールドのみを更新する
+// *string, *int はポインタ型（nilにできる型）で、部分更新
+func (r *ItemRepository) Update(ctx context.Context, id int64, name, brand *string, purchasePrice *int) (*entity.Item, error) {
+	// SQLのUPDATE文のSET部分を動的に構築するためのスライス
+	setParts := []string{}
+	// SQLのプレースホルダー(?)に入る値を格納するスライス
+	args := []interface{}{}
+
+	// nameがnilでない（更新対象）の場合、SET文と値を追加
+	if name != nil {
+		setParts = append(setParts, "name = ?")
+		args = append(args, *name) // *nameでポインタの中身を取得
+	}
+	// brandがnilでない場合、SET文と値を追加
+	if brand != nil {
+		setParts = append(setParts, "brand = ?")
+		args = append(args, *brand)
+	}
+	// purchasePriceがnilでない場合、SET文と値を追加
+	if purchasePrice != nil {
+		setParts = append(setParts, "purchase_price = ?")
+		args = append(args, *purchasePrice)
+	}
+
+	// 更新対象のフィールドが一つもない場合はエラー
+	if len(setParts) == 0 {
+		return nil, fmt.Errorf("%w: no fields to update", domainErrors.ErrInvalidInput)
+	}
+
+	// updated_atフィールドは必ず現在時刻で更新
+	setParts = append(setParts, "updated_at = NOW()")
+	
+	// WHERE条件用のIDを引数の最後に追加
+	args = append(args, id)
+
+	// 動的にUPDATE SQLを構築（strings.JoinでSET部分をカンマで連結）
+	query := fmt.Sprintf(`
+		UPDATE items 
+		SET %s
+		WHERE id = ?
+	`, strings.Join(setParts, ", "))
+
+	// SQLを実行（プレースホルダーに値をバインド）
+	result, err := r.Execute(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s", domainErrors.ErrDatabaseError, err.Error())
+	}
+
+	// 実際に更新された行数を取得
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return nil, fmt.Errorf("%w: failed to get rows affected: %s", domainErrors.ErrDatabaseError, err.Error())
+	}
+
+	// 更新された行が0の場合はアイテムが存在しない
+	if rowsAffected == 0 {
+		return nil, domainErrors.ErrItemNotFound
+	}
+
+	// 更新後のアイテムを取得して返す
+	return r.FindByID(ctx, id)
 }
 
 func (r *ItemRepository) GetSummaryByCategory(ctx context.Context) (map[string]int, error) {
