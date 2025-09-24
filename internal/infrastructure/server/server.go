@@ -10,11 +10,11 @@ import (
 
 	"github.com/labstack/echo/v4"
 
-	databaseInfra "Aicon-assignment/internal/infrastructure/database"
-	itemController "Aicon-assignment/internal/interfaces/controller/items"
-	"Aicon-assignment/internal/interfaces/controller/system"
-	itemDatabase "Aicon-assignment/internal/interfaces/database"
-	"Aicon-assignment/internal/usecase"
+	databaseInfra "aicon-coding-test/internal/infrastructure/database"
+	itemController "aicon-coding-test/internal/interfaces/controller/items"
+	"aicon-coding-test/internal/interfaces/controller/system"
+	itemDatabase "aicon-coding-test/internal/interfaces/database"
+	"aicon-coding-test/internal/usecase"
 )
 
 // サーバー用の構造体

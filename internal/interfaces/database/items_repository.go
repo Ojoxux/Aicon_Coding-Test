@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"Aicon-assignment/internal/domain/entity"
-	domainErrors "Aicon-assignment/internal/domain/errors"
+	"aicon-coding-test/internal/domain/entity"
+	domainErrors "aicon-coding-test/internal/domain/errors"
 )
 
 type ItemRepository struct {

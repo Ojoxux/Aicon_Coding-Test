@@ -4,7 +4,7 @@ import (
 	"context"
 	"log"
 
-	"Aicon-assignment/internal/infrastructure/server"
+	"aicon-coding-test/internal/infrastructure/server"
 )
 
 func main() {

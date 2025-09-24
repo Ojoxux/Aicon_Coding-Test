@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strconv"
 
-	domainErrors "Aicon-assignment/internal/domain/errors"
-	"Aicon-assignment/internal/usecase"
+	domainErrors "aicon-coding-test/internal/domain/errors"
+	"aicon-coding-test/internal/usecase"
 
 	"github.com/labstack/echo/v4"
 )

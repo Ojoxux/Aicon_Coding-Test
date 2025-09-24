@@ -3,7 +3,7 @@ package usecase
 import (
 	"context"
 
-	"Aicon-assignment/internal/domain/entity"
+	"aicon-coding-test/internal/domain/entity"
 )
 
 // ItemRepository defines the interface for item data access

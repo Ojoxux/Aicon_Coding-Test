@@ -1,4 +1,4 @@
-module Aicon-assignment
+module aicon-coding-test
 
 go 1.23.0
 

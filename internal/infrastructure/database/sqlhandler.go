@@ -8,8 +8,8 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 
-	"Aicon-assignment/internal/infrastructure/config"
-	"Aicon-assignment/internal/interfaces/database"
+	"aicon-coding-test/internal/infrastructure/config"
+	"aicon-coding-test/internal/interfaces/database"
 )
 
 type MySqlHandler struct {
