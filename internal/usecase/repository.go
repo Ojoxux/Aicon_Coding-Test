@@ -17,6 +17,11 @@ type ItemRepository interface {
 	// Create creates a new item and returns it with the generated ID
 	Create(ctx context.Context, item *entity.Item) (*entity.Item, error)
 
+	// Update はアイテムの特定フィールドをIDで部分更新する
+	// *string, *int はポインタ型で、nilの場合は更新対象外を意味する
+	// 更新後のアイテムを返す
+	Update(ctx context.Context, id int64, name, brand *string, purchasePrice *int) (*entity.Item, error)
+
 	// Delete deletes an item by ID
 	Delete(ctx context.Context, id int64) error
 

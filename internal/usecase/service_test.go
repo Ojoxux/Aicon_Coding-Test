@@ -13,12 +13,18 @@ import (
 )
 
 // MockItemRepository はtestify/mockを使用したモックリポジトリ
+// 実際のデータベースを使わずにテストを行うための偽のリポジトリ
+// mock.Mockを埋め込むことで、モック機能を利用可能にする
 type MockItemRepository struct {
-	mock.Mock
+	mock.Mock // testify/mockライブラリの基本構造体
 }
 
+// FindAll はモック版の全アイテム取得関数
+// m.Called(ctx) でモックが呼ばれたことを記録し、事前に設定された戻り値を返す
 func (m *MockItemRepository) FindAll(ctx context.Context) ([]*entity.Item, error) {
-	args := m.Called(ctx)
+	args := m.Called(ctx) // モックの呼び出しを記録
+	// args.Get(0) で最初の戻り値（アイテムスライス）を取得
+	// args.Error(1) で2番目の戻り値（エラー）を取得
 	return args.Get(0).([]*entity.Item), args.Error(1)
 }
 
@@ -35,6 +41,19 @@ func (m *MockItemRepository) Create(ctx context.Context, item *entity.Item) (*en
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
+	return args.Get(0).(*entity.Item), args.Error(1)
+}
+
+// Update はモック版のアイテム更新関数（今回追加した関数）
+// 実際のデータベース更新は行わず、テスト用の動作をシミュレートする
+func (m *MockItemRepository) Update(ctx context.Context, id int64, name, brand *string, purchasePrice *int) (*entity.Item, error) {
+	// モックの呼び出しを記録（全ての引数を渡す）
+	args := m.Called(ctx, id, name, brand, purchasePrice)
+	// 戻り値がnilの場合（エラーケース）
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	// 正常ケースでは更新されたアイテムを返す
 	return args.Get(0).(*entity.Item), args.Error(1)
 }
 
@@ -116,6 +135,173 @@ func TestItemUsecase_GetAllItems(t *testing.T) {
 			mockRepo.AssertExpectations(t)
 		})
 	}
+}
+
+// TestItemUsecase_UpdateItem は新しく追加したUpdateItem関数のテスト
+// テーブル駆動テスト（Table-Driven Test）を使用して複数のケースを一度にテスト
+func TestItemUsecase_UpdateItem(t *testing.T) {
+	// テストケースの構造体スライス
+	tests := []struct {
+		name      string
+		id        int64
+		input     UpdateItemInput
+		setupMock func(*MockItemRepository)
+		wantErr   bool
+		wantItem  bool
+	}{
+		{
+			// 正常系のテストケース: 名前フィールドのみを更新
+			name: "正常系: 名前のみ更新",
+			id:   1,
+			input: UpdateItemInput{
+				// stringPtr()でstring型のポインタを作成（部分更新のため）
+				Name: stringPtr("更新された時計"),
+				// BrandとPurchasePriceはnilのまま（更新対象外）
+			},
+			setupMock: func(mockRepo *MockItemRepository) {
+				// 更新後のアイテムを作成
+				updatedItem, _ := entity.NewItem("更新された時計", "時計", "ROLEX", 1000000, "2023-01-01")
+				updatedItem.ID = 1
+				// モックに期待する呼び出しを設定
+				// Update(ctx, id=1, name="更新された時計", brand=nil, price=nil) が呼ばれることを期待
+				mockRepo.On("Update", mock.Anything, int64(1), stringPtr("更新された時計"), (*string)(nil), (*int)(nil)).Return(updatedItem, nil)
+			},
+			wantErr:  false, // エラーは期待しない
+			wantItem: true,  // アイテムが返されることを期待
+		},
+		{
+			// 正常系のテストケース: 複数フィールドを同時に更新
+			name: "正常系: 複数フィールド更新",
+			id:   1,
+			input: UpdateItemInput{
+				// 3つのフィールドすべてを更新対象にする
+				Name:          stringPtr("新しい時計"),
+				Brand:         stringPtr("OMEGA"),
+				PurchasePrice: intPtr(2000000),
+			},
+			setupMock: func(mockRepo *MockItemRepository) {
+				// 複数フィールドが更新されたアイテムを作成
+				updatedItem, _ := entity.NewItem("新しい時計", "時計", "OMEGA", 2000000, "2023-01-01")
+				updatedItem.ID = 1
+				// すべてのフィールドが渡されることを期待
+				mockRepo.On("Update", mock.Anything, int64(1), stringPtr("新しい時計"), stringPtr("OMEGA"), intPtr(2000000)).Return(updatedItem, nil)
+			},
+			wantErr:  false,
+			wantItem: true,
+		},
+		{
+			// 異常系のテストケース: 無効なID（0以下）
+			name: "異常系: 無効なID",
+			id:   0, // 0は無効なID
+			input: UpdateItemInput{
+				Name: stringPtr("更新された時計"),
+			},
+			setupMock: func(mockRepo *MockItemRepository) {
+				// ID検証でエラーになるため、リポジトリのメソッドは呼ばれない
+				// モックの設定は不要
+			},
+			wantErr:  true,  // エラーが発生することを期待
+			wantItem: false, // アイテムは返されない
+		},
+		{
+			// 異常系のテストケース: 更新対象のフィールドが一つもない
+			name:  "異常系: 更新フィールドなし",
+			id:    1,
+			input: UpdateItemInput{}, // 全フィールドがnil（更新対象なし）
+			setupMock: func(mockRepo *MockItemRepository) {
+				// 更新フィールドがないためリポジトリは呼ばれない
+				// モックの設定は不要
+			},
+			wantErr:  true,  // "no fields to update" エラーが発生
+			wantItem: false,
+		},
+		{
+			// 異常系のテストケース: バリデーションエラー（空の名前）
+			name: "異常系: 空の名前",
+			id:   1,
+			input: UpdateItemInput{
+				Name: stringPtr(""), // 空文字列はバリデーションエラー
+			},
+			setupMock: func(mockRepo *MockItemRepository) {
+				// バリデーションでエラーになるため、リポジトリは呼ばれない
+			},
+			wantErr:  true,  // "name cannot be empty" エラーが発生
+			wantItem: false,
+		},
+		{
+			// 異常系のテストケース: バリデーションエラー（負の価格）
+			name: "異常系: 負の価格",
+			id:   1,
+			input: UpdateItemInput{
+				PurchasePrice: intPtr(-1), // 負の値はバリデーションエラー
+			},
+			setupMock: func(mockRepo *MockItemRepository) {
+				// バリデーションでエラーになるため、リポジトリは呼ばれない
+			},
+			wantErr:  true,  // "purchase_price must be 0 or greater" エラーが発生
+			wantItem: false,
+		},
+		{
+			// 異常系のテストケース: 存在しないアイテムの更新
+			name: "異常系: アイテムが見つからない",
+			id:   999, // 存在しないID
+			input: UpdateItemInput{
+				Name: stringPtr("更新された時計"),
+			},
+			setupMock: func(mockRepo *MockItemRepository) {
+				// リポジトリのUpdateメソッドがErrItemNotFoundを返すように設定
+				mockRepo.On("Update", mock.Anything, int64(999), stringPtr("更新された時計"), (*string)(nil), (*int)(nil)).Return((*entity.Item)(nil), domainErrors.ErrItemNotFound)
+			},
+			wantErr:  true,  // ErrItemNotFound エラーが発生
+			wantItem: false,
+		},
+	}
+
+	// 各テストケースを順番に実行するループ
+	for _, tt := range tests {
+		// t.Run で個別のサブテストとして実行（テスト名が表示される）
+		t.Run(tt.name, func(t *testing.T) {
+			// 新しいモックリポジトリのインスタンスを作成
+			mockRepo := new(MockItemRepository)
+			// テストケース固有のモック設定を実行
+			tt.setupMock(mockRepo)
+			// モックを使ってユースケースのインスタンスを作成
+			usecase := NewItemUsecase(mockRepo)
+
+			// テスト対象の関数を実行
+			ctx := context.Background()
+			item, err := usecase.UpdateItem(ctx, tt.id, tt.input)
+
+			// 期待される結果と実際の結果を比較
+			if tt.wantErr {
+				// エラーが期待される場合
+				assert.Error(t, err)     // エラーが発生していることを確認
+				assert.Nil(t, item)      // アイテムはnilであることを確認
+			} else {
+				// 正常終了が期待される場合
+				assert.NoError(t, err)   // エラーが発生していないことを確認
+				if tt.wantItem {
+					assert.NotNil(t, item) // アイテムが返されていることを確認
+				}
+			}
+
+			// モックが期待通りに呼ばれたかを確認
+			mockRepo.AssertExpectations(t)
+		})
+	}
+}
+
+// ヘルパー関数群
+// Go言語では値からポインタを直接作ることができないため、これらの関数を使用
+
+// stringPtr は文字列値からstring型のポインタを作成する
+func stringPtr(s string) *string {
+	return &s // &演算子でsのアドレス（ポインタ）を取得
+}
+
+// intPtr は整数値からint型のポインタを作成する
+func intPtr(i int) *int {
+	return &i // &演算子でiのアドレス（ポインタ）を取得
 }
 
 func TestItemUsecase_GetItemByID(t *testing.T) {
